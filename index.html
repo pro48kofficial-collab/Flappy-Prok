@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Prok</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #1a1a1a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            color: #fff;
+        }
+        /* Емуляція екрана телефона */
+        #phone-wrapper {
+            width: 100%;
+            max-width: 400px;
+            height: 100vh;
+            max-height: 800px;
+            position: relative;
+            background: linear-gradient(to bottom, #111, #222);
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0,0,0,0.7);
+            border: 2px solid #333;
+        }
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: none;
+            flex-direction: column;
+            padding: 20px;
+            z-index: 10;
+        }
+        .screen.active { display: flex; }
+
+        /* Стильні кнопки */
+        .btn {
+            background: linear-gradient(135deg, #ff9900, #ff5500);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 8px 0;
+            box-shadow: 0 4px 10px rgba(255, 85, 0, 0.3);
+            transition: 0.2s;
+            text-align: center;
+            text-decoration: none;
+        }
+        .btn:active { transform: scale(0.95); box-shadow: 0 2px 5px rgba(255, 85, 0, 0.3); }
+        .btn-secondary { background: linear-gradient(135deg, #444, #222); box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+
+        /* Головне Меню */
+        #menu-screen {
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to bottom, #1a1c2e, #0f101b);
+        }
+        .header-info {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.05);
+            padding: 10px 15px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .profile-section { display: flex; align-items: center; gap: 10px; }
+        .avatar-container {
+            width: 50px; height: 50px;
+            border-radius: 50%;
+            border: 2px solid #ff9900;
+            overflow: hidden;
+            background: #333;
+            position: relative;
+            cursor: pointer;
+        }
+        .avatar-container img { width: 100%; height: 100%; object-fit: cover; }
+        .stats-brief div { font-size: 14px; margin: 2px 0; font-weight: bold; }
+        .coin-txt { color: #ffd700; }
+        .score-txt { color: #00ffcc; }
+
+        .game-title {
+            font-size: 36px;
+            font-weight: 900;
+            text-shadow: 0 0 15px rgba(255,153,0,0.6);
+            color: #fff;
+            margin-top: 10px;
+        }
+        .logo-bird {
+            width: 70px; height: 70px;
+            background: #ffcc00;
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 0 20px #ffcc00;
+            animation: float 2s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .menu-buttons { width: 100%; display: flex; flex-direction: column; }
+        .footer-info { font-size: 12px; color: #666; display: flex; justify-content: space-between; width: 100%; }
+
+        /* Вікна з прокруткою (Магазин, Топ) */
+        .scroll-window {
+            background: rgba(0,0,0,0.6);
+            border-radius: 20px;
+            border: 1px solid #333;
+            flex-grow: 1;
+            width: 100%;
+            margin: 15px 0;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        .window-title { font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 15px; color: #ff9900; }
+        
+        /* Таби для Топу */
+        .tabs { display: flex; gap: 5px; margin-bottom: 10px; }
+        .tab-btn { flex: 1; background: #333; border: none; padding: 8px; color: #fff; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .tab-btn.active { background: #ff9900; }
+
+        /* Елементи Списків */
+        .shop-item, .top-item {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(255,255,255,0.05);
+            padding: 10px; border-radius: 10px; margin-bottom: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .shop-item.equipped { border-color: #00ffcc; background: rgba(0,255,204,0.05); }
+        .top-item.me { border-color: #ff9900; background: rgba(255,153,0,0.1); }
+
+        /* Ліги в топі */
+        .badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+        .badge-bronze { background: #cd7f32; color: #fff; }
+        .badge-silver { background: #c0c0c0; color: #000; }
+        .badge-gold { background: #ffd700; color: #000; }
+
+        /* Геймплейна зона */
+        #game-screen { padding: 0; background: #000; }
+        canvas { width: 100%; height: 100%; display: block; background: #222; }
+        
+        /* Кастомний інтерфейс поверх Canvas */
+        #game-ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 20px;
+        }
+        .live-score {
+            align-self: flex-end; background: rgba(0,0,0,0.6); padding: 8px 15px;
+            border-radius: 12px; border: 1px solid #ff9900; font-weight: bold; font-size: 16px;
+        }
+        .game-controls {
+            display: flex; justify-content: space-between; width: 100%; pointer-events: auto; gap: 15px; margin-bottom: 10px;
+        }
+        .ctrl-btn {
+            flex: 1; height: 75px; background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 15px; color: white; font-weight: bold; font-size: 18px; cursor: pointer;
+            backdrop-filter: blur(5px);
+        }
+        .ctrl-btn:active { background: rgba(255,255,255,0.3); }
+
+        /* Екран програшу */
+        #gameover-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 16, 27, 0.9); z-index: 100;
+            display: none; flex-direction: column; justify-content: center; align-items: center; padding: 30px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="phone-wrapper">
+
+    <!-- 1. LOADING SCREEN -->
+    <div id="loading-screen" class="screen active" style="justify-content: center; align-items: center; background: #0f101b;">
+        <div class="logo-bird"></div>
+        <h2 style="margin-top: 20px; color: #ff9900; letter-spacing: 2px;">LOADING...</h2>
+    </div>
+
+    <!-- 2. MAIN MENU -->
+    <div id="menu-screen" class="screen">
+        <div class="header-info">
+            <div class="profile-section">
+                <div class="avatar-container" onclick="triggerAvatarUpload()">
+                    <img id="menu-avatar" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ff9900'><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/></svg>" alt="avatar">
+                </div>
+                <div>
+                    <input type="text" id="nickname-input" style="background:transparent; border:none; color:#fff; font-weight:bold; font-size:16px; width:120px; border-bottom:1px dashed #555;" value="Player">
+                    <div style="font-size:11px; color:#aaa; margin-top:2px;">Tap avatar/name to change</div>
+                </div>
+            </div>
+            <div class="stats-brief">
+                <div>Coins: <span id="menu-coins" class="coin-txt">0</span></div>
+                <div>Best: <span id="menu-best" class="score-txt">0</span></div>
+            </div>
+        </div>
+
+        <div style="text-align: center;">
+            <h1 class="game-title">Flappy Prok</h1>
+            <p style="color: #666; font-size: 13px;">by Clidex Studio</p>
+        </div>
+
+        <div class="menu-buttons">
+            <button class="btn" onclick="startGame()">PLAY GAME</button>
+            <button class="btn btn-secondary" onclick="openWindow('shop')">SHOP</button>
+            <button class="btn btn-secondary" onclick="openWindow('leaderboard')">TOP PLAYERS</button>
+            <button class="btn btn-secondary" onclick="openWindow('stats')">STATISTICS</button>
+            <button class="btn btn-secondary" onclick="openNews()">NEWS</button>
+        </div>
+
+        <div class="footer-info">
+            <span>v1.0.4-Beta</span>
+            <span>Progress Saved</span>
+        </div>
+    </div>
+
+    <!-- 3. SHOP SCREEN -->
+    <div id="shop-screen" class="screen" style="background: #11121c;">
+        <div class="window-title">CRAZY SHOP</div>
+        <div style="text-align: center; font-weight: bold; margin-bottom: 10px;">Your Coins: <span class="coin-txt menu-coins-sync">0</span></div>
+        <div class="scroll-window" id="shop-items-list">
+            <!-- Items generated via JS -->
+        </div>
+        <button class="btn btn-secondary" onclick="backToMenu()">BACK TO MENU</button>
+    </div>
+
+    <!-- 4. LEADERBOARD SCREEN -->
+    <div id="leaderboard-screen" class="screen" style="background: #11121c;">
+        <div class="window-title">LEADERBOARD</div>
+        <div class="tabs">
+            <button id="tab-score-btn" class="tab-btn active" onclick="switchLeaderboardTab('score')">By Record</button>
+            <button id="tab-coins-btn" class="tab-btn" onclick="switchLeaderboardTab('coins')">By Coins</button>
+        </div>
+        <div class="scroll-window" id="leaderboard-list">
+            <!-- Leaderboard list generated via JS -->
+        </div>
+        <button class="btn btn-secondary" onclick="backToMenu()">BACK TO MENU</button>
+    </div>
+
+    <!-- 5. STATISTICS SCREEN -->
+    <div id="stats-screen" class="screen" style="background: #11121c;">
+        <div class="window-title">YOUR STATS</div>
+        <div class="scroll-window" style="display:flex; flex-direction:column; gap:15px; font-size:16px;">
+            <div style="display:flex; justify-content:space-between;"><span>Current Nickname:</span><span id="stat-nick" style="font-weight:bold;">-</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>Highest Record:</span><span id="stat-best" class="score-txt" style="font-weight:bold;">0</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>Total Coins:</span><span id="stat-coins" class="coin-txt" style="font-weight:bold;">0</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>Current League:</span><span id="stat-league" style="font-weight:bold;">-</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>Games Played:</span><span id="stat-games" style="font-weight:bold; color:#ff9900;">0</span></div>
+        </div>
+        <button class="btn btn-secondary" onclick="backToMenu()">BACK TO MENU</button>
+    </div>
+
+    <!-- 6. GAME SCREEN -->
+    <div id="game-screen" class="screen">
+        <canvas id="gameCanvas"></canvas>
+        <div id="game-ui">
+            <div class="live-score">Best: <span id="live-best" class="score-txt">0</span> | Score: <span id="live-current" style="color:#fff;">0</span></div>
+            <div class="game-controls">
+                <button class="ctrl-btn" id="btn-jump">JUMP 🚀</button>
+                <button class="ctrl-btn" id="btn-dash" style="background:rgba(255, 85, 0, 0.25); border-color:#ff5500;">DASH ⚡</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. GAME OVER SUB-SCREEN -->
+    <div id="gameover-screen">
+        <h1 style="color:#ff3333; font-size:40px; font-weight:900; text-shadow:0 0 15px rgba(255,0,0,0.5); margin-bottom:10px;">GAME OVER</h1>
+        <p style="font-size:18px; margin-bottom:5px;">Score: <span id="go-score" style="font-weight:bold; color:#00ffcc;">0</span></p>
+        <p style="font-size:16px; margin-bottom:25px; color:#ffd700;">Earned Coins: +<span id="go-coins" style="font-weight:bold;">0</span></p>
+        <div style="display:flex; flex-direction:column; width:100%;">
+            <button class="btn" onclick="restartGame()">RESTART</button>
+            <button class="btn btn-secondary" onclick="exitToMenu()">MAIN MENU</button>
+        </div>
+    </div>
+
+    <!-- Прихований інпут для завантаження фото -->
+    <input type="file" id="avatar-input" accept="image/*" style="display:none;" onchange="handleAvatarUpload(event)">
+
+</div>
+
+<script>
+    // --- ПАРАМЕТРИ ТА ЗБЕРЕЖЕННЯ ПРОГРЕСУ ---
+    let playerData = {
+        nickname: "Player",
+        avatar: "",
+        bestScore: 0,
+        coins: 0,
+        gamesPlayed: 0,
+        equippedColor: "#ffcc00",
+        equippedItem: "none",
+        ownedItems: ["none"]
+    };
+
+    const shopItems = [
+        { id: 'color_yellow', type: 'color', name: 'Yellow Skin', value: '#ffcc00', price: 0 },
+        { id: 'color_aqua', type: 'color', name: 'Neon Aqua Skin', value: '#00ffcc', price: 15 },
+        { id: 'color_pink', type: 'color', name: 'Cyber Pink Skin', value: '#ff007f', price: 30 },
+        { id: 'hat_cap', type: 'hat', name: 'Cool Cap', value: 'cap', price: 10 },
+        { id: 'hat_crown', type: 'hat', name: 'King Crown', value: 'crown', price: 50 },
+        { id: 'cloth_jacket', type: 'cloth', name: 'Red Jacket', value: 'jacket', price: 25 }
+    ];
+
+    function loadProgress() {
+        const saved = localStorage.getItem('flappy_prok_save');
+        if (saved) {
+            try {
+                playerData = { ...playerData, ...JSON.parse(saved) };
+            } catch(e) { console.error("Error loading progress"); }
+        }
+        syncUi();
+    }
+
+    function saveProgress() {
+        localStorage.setItem('flappy_prok_save', JSON.stringify(playerData));
+        syncUi();
+    }
+
+    function syncUi() {
+        document.getElementById('nickname-input').value = playerData.nickname;
+        document.getElementById('menu-coins').innerText = playerData.coins;
+        document.querySelectorAll('.menu-coins-sync').forEach(el => el.innerText = playerData.coins);
+        document.getElementById('menu-best').innerText = playerData.bestScore;
+        if (playerData.avatar) {
+            document.getElementById('menu-avatar').src = playerData.avatar;
+        }
+    }
+
+    // --- КЕРУВАННЯ ЕКРАНАМИ ---
+    function openWindow(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(`${screenId}-screen`).classList.add('active');
+        if(screenId === 'shop') renderShop();
+        if(screenId === 'leaderboard') renderLeaderboard();
+        if(screenId === 'stats') renderStats();
+    }
+
+    function backToMenu() {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById('menu-screen').classList.add('active');
+    }
+
+    function openNews() {
+        window.open('https://t.me/clidex_studio', '_blank');
+    }
+
+    // Завантаження гри (імітація для атмосфери)
+    window.addEventListener('DOMContentLoaded', () => {
+        loadProgress();
+        setTimeout(() => {
+            document.getElementById('loading-screen').classList.remove('active');
+            document.getElementById('menu-screen').classList.add('active');
+        }, 1500);
+
+        // Події нікнейму
+        document.getElementById('nickname-input').addEventListener('change', (e) => {
+            playerData.nickname = e.target.value || "Player";
+            saveProgress();
+        });
+    });
+
+    // --- АВАТАРКИ ---
+    function triggerAvatarUpload() { document.getElementById('avatar-input').click(); }
+    function handleAvatarUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                playerData.avatar = e.target.result;
+                saveProgress();
+            }
+            reader.readAsDataURL(file);
+        }
+    }
+
+    // --- МАГАЗИН ---
+    function renderShop() {
+        const list = document.getElementById('shop-items-list');
+        list.innerHTML = '';
+        shopItems.forEach(item => {
+            const isOwned = playerData.ownedItems.includes(item.id);
+            const isEquipped = playerData.equippedColor === item.value || playerData.equippedItem === item.id;
+            
+            let btnText = `Buy: ${item.price} 🪙`;
+            if (isOwned) btnText = isEquipped ? 'Equipped' : 'Equip';
+
+            const div = document.createElement('div');
+            div.className = `shop-item ${isEquipped ? 'equipped' : ''}`;
+            div.innerHTML = `
+                <div>
+                    <div style="font-weight:bold; color:#fff;">${item.name}</div>
+                    <div style="font-size:12px; color:#aaa;">Type: ${item.type}</div>
+                </div>
+                <button class="btn btn-secondary" style="margin:0; padding:6px 12px; font-size:13px;" onclick="buyOrEquip('${item.id}')">${btnText}</button>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    function buyOrEquip(itemId) {
+        const item = shopItems.find(i => i.id === itemId);
+        if (!item) return;
+
+        const isOwned = playerData.ownedItems.includes(itemId);
+        if (isOwned) {
+            if (item.type === 'color') playerData.equippedColor = item.value;
+            else playerData.equippedItem = itemId;
+        } else {
+            if (playerData.coins >= item.price) {
+                playerData.coins -= item.price;
+                playerData.ownedItems.push(itemId);
+                if (item.type === 'color') playerData.equippedColor = item.value;
+                else playerData.equippedItem = itemId;
+            } else {
+                alert("Not enough coins!");
+                return;
+            }
+        }
+        saveProgress();
+        renderShop();
+    }
+
+    // --- СТАТИСТИКА ТА ЛІГИ ---
+    function getLeague(score) {
+        if (score >= 50) return { name: 'Gold', class: 'badge-gold' };
+        if (score >= 20) return { name: 'Silver', class: 'badge-silver' };
+        return { name: 'Bronze', class: 'badge-bronze' };
+    }
+
+    function renderStats() {
+        document.getElementById('stat-nick').innerText = playerData.nickname;
+        document.getElementById('stat-best').innerText = playerData.bestScore;
+        document.getElementById('stat-coins').innerText = playerData.coins;
+        document.getElementById('stat-games').innerText = playerData.gamesPlayed;
+        const league = getLeague(playerData.bestScore);
+        document.getElementById('stat-league').innerHTML = `<span class="badge ${league.class}">${league.name}</span>`;
+    }
+
+    // --- ТОП ГРАВЦІВ (Генерація + Сортування) ---
+    let currentTab = 'score';
+    function switchLeaderboardTab(tab) {
+        currentTab = tab;
+        document.getElementById('tab-score-btn').classList.toggle('active', tab === 'score');
+        document.getElementById('tab-coins-btn').classList.toggle('active', tab === 'coins');
+        
