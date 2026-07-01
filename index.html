@@ -456,4 +456,288 @@
         currentTab = tab;
         document.getElementById('tab-score-btn').classList.toggle('active', tab === 'score');
         document.getElementById('tab-coins-btn').classList.toggle('active', tab === 'coins');
+        renderLeaderboard();
+    }
+
+    function renderLeaderboard() {
+        const list = document.getElementById('leaderboard-list');
+        list.innerHTML = '';
+
+        // Генеруємо фейкових топ-гравців для масовки, куди вставляємо і нашого гравця
+        let leaders = [];
+        for(let i = 1; i <= 150; i++) {
+            leaders.push({
+                name: `ProGamer_${i}`,
+                score: Math.floor(Math.abs(Math.sin(i)) * 60),
+                coins: Math.floor(Math.abs(Math.cos(i)) * 200),
+                isMe: false
+            });
+        }
+        leaders.push({ name: playerData.nickname, score: playerData.bestScore, coins: playerData.coins, isMe: true });
+
+        // Сортування
+        if (currentTab === 'score') {
+            leaders.sort((a,b) => b.score - a.score);
+        } else {
+            leaders.sort((a,b) => b.coins - a.coins);
+        }
+
+        // Відображаємо топ 100
+        leaders.slice(0, 100).forEach((user, index) => {
+            const league = getLeague(user.score);
+            const div = document.createElement('div');
+            div.className = `top-item ${user.isMe ? 'me' : ''}`;
+            
+            // Випадковий колір для ніків ботів, або помаранчевий для себе
+            const nickColor = user.isMe ? '#ff9900' : `hsl(${(index * 35) % 360}, 80%, 65%)`;
+
+            div.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:12px; color:#888; width:20px;">#${index+1}</span>
+                    <span style="color:${nickColor}; font-weight:bold;">${user.name}</span>
+                    <span class="badge ${league.class}">${league.name}</span>
+                </div>
+                <div style="font-size:13px; font-weight:bold;">
+                    ${currentTab === 'score' ? `<span class="score-txt">${user.score} pts</span>` : `<span class="coin-txt">${user.coins} 🪙</span>`}
+                </div>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+
+    // --- ІГРОВИЙ РУШІЙ (CANVAS FLAPPY BIRD) ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let animationFrameId;
+    let gameRunning = false;
+
+    // Стан ігрових об'єктів
+    let bird = { x: 50, y: 200, velocity: 0, gravity: 0.4, jumpStrength: -6.5, radius: 14 };
+    let pipes = [];
+    let pipeFrameCount = 0;
+    let currentScore = 0;
+    let dashCooldown = 0;
+    let dashActiveTicks = 0;
+    let gameSpeed = 2;
+
+    function resizeCanvas() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+    }
+
+    function startGame() {
+        openWindow('game');
+        resizeCanvas();
+        resetGameEngine();
+        gameRunning = true;
+        playerData.gamesPlayed++;
+        saveProgress();
+        gameLoop();
+    }
+
+    function resetGameEngine() {
+        bird.y = canvas.height / 2;
+        bird.velocity = 0;
+        pipes = [];
+        pipeFrameCount = 0;
+        currentScore = 0;
+        dashCooldown = 0;
+        dashActiveTicks = 0;
+        gameSpeed = 2;
+        document.getElementById('live-best').innerText = playerData.bestScore;
+        document.getElementById('live-current').innerText = currentScore;
+        document.getElementById('gameover-screen').style.display = 'none';
+    }
+
+    function restartGame() {
+        resetGameEngine();
+        gameRunning = true;
+        playerData.gamesPlayed++;
+        saveProgress();
+    }
+
+    function exitToMenu() {
+        gameRunning = false;
+        cancelAnimationFrame(animationFrameId);
+        document.getElementById('gameover-screen').style.display = 'none';
+        backToMenu();
+    }
+
+    function gameOver() {
+        gameRunning = false;
+        // Розрахунок монет: кожні 10 очок рекорду = 1 монета
+        let earnedCoins = Math.floor(currentScore / 10);
         
+        playerData.coins += earnedCoins;
+        if (currentScore > playerData.bestScore) {
+            playerData.bestScore = currentScore;
+        }
+        saveProgress();
+
+        document.getElementById('go-score').innerText = currentScore;
+        document.getElementById('go-coins').innerText = earnedCoins;
+        document.getElementById('gameover-screen').style.display = 'flex';
+    }
+
+    // Керування кнопками
+    document.getElementById('btn-jump').addEventListener('touchstart', (e) => { e.preventDefault(); triggerJump(); });
+    document.getElementById('btn-jump').addEventListener('mousedown', triggerJump);
+    document.getElementById('btn-dash').addEventListener('touchstart', (e) => { e.preventDefault(); triggerDash(); });
+    document.getElementById('btn-dash').addEventListener('mousedown', triggerDash);
+
+    function triggerJump() {
+        if(!gameRunning) return;
+        bird.velocity = bird.jumpStrength;
+    }
+
+    function triggerDash() {
+        if(!gameRunning || dashCooldown > 0) return;
+        dashActiveTicks = 12; // Даш триває 12 кадрів
+        dashCooldown = 120;   // Перезарядка 2 секунди (при 60fps)
+    }
+
+    // Головний ігровий цикл
+    function gameLoop() {
+        if (!gameRunning) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Задній фон (Градієнт живого неба)
+        let bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        bgGrad.addColorStop(0, '#1a1c2e');
+        bgGrad.addColorStop(1, '#0b0c16');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Ефекти Дашу
+        if (dashCooldown > 0) dashCooldown--;
+        if (dashActiveTicks > 0) {
+            dashActiveTicks--;
+            gameSpeed = 6; // Швидкість різко збільшується
+            // Малюємо хвіст за пташкою
+            ctx.fillStyle = 'rgba(255, 85, 0, 0.3)';
+            ctx.fillRect(bird.x - 30, bird.y - bird.radius, 30, bird.radius * 2);
+        } else {
+            gameSpeed = 2 + Math.floor(currentScore / 15); // Швидкість росте від рекорду
+        }
+
+        // Логіка пташки
+        bird.velocity += bird.gravity;
+        bird.y += bird.velocity;
+
+        // Малювання пташки
+        ctx.save();
+        ctx.translate(bird.x, bird.y);
+        // Обертання залежно від падіння
+        let angle = Math.min(Math.max(bird.velocity / 12, -0.5), 0.8);
+        ctx.rotate(angle);
+        
+        // Тіло пташки (Колір з магазину)
+        ctx.fillStyle = playerData.equippedColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, bird.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = playerData.equippedColor;
+
+        // Око та дзьоб
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(6, -4, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(7, -4, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ff5500';
+        ctx.beginPath();
+        ctx.moveTo(10, 0); ctx.lineTo(18, 3); ctx.lineTo(10, 6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Кастомізація з магазину (Шляпа / Одяг)
+        if(playerData.equippedItem === 'hat_crown') {
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(-10, -22, 20, 10);
+        } else if(playerData.equippedItem === 'hat_cap') {
+            ctx.fillStyle = '#ff3333';
+            ctx.fillRect(-12, -18, 18, 6);
+            ctx.fillRect(-4, -18, 16, 3);
+        }
+        ctx.restore();
+        ctx.shadowBlur = 0; // скидання тіні
+
+        // Перевірка на виліт за межі екрана
+        if (bird.y + bird.radius > canvas.height || bird.y - bird.radius < 0) {
+            gameOver();
+            return;
+        }
+
+        // Спавн труб
+        pipeFrameCount++;
+        let pipeSpawnRate = dashActiveTicks > 0 ? 25 : 90; 
+        if (pipeFrameCount % pipeSpawnRate === 0) {
+            let gap = 130 - Math.min(currentScore * 0.8, 40); // Звуження проходу з часом
+            let minHeight = 40;
+            let maxHeight = canvas.height - gap - minHeight - 100;
+            let topHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+
+            pipes.push({
+                x: canvas.width,
+                top: topHeight,
+                bottom: canvas.height - topHeight - gap,
+                passed: false
+            });
+        }
+
+        // Рух та малювання труб
+        for (let i = pipes.length - 1; i >= 0; i--) {
+            let p = pipes[i];
+            p.x -= gameSpeed;
+
+            // Красивий неоновий колір для труб
+            ctx.fillStyle = '#111';
+            ctx.strokeStyle = '#ff9900';
+            ctx.lineWidth = 3;
+
+            // Верхня труба
+            ctx.fillRect(p.x, 0, 50, p.top);
+            ctx.strokeRect(p.x, -5, 50, p.top + 5);
+
+            // Нижня труба
+            ctx.fillRect(p.x, canvas.height - p.bottom, 50, p.bottom);
+            ctx.strokeRect(p.x, canvas.height - p.bottom, 50, p.bottom + 5);
+
+            // Перевірка колізій (Даш дає невразливість!)
+            if (dashActiveTicks === 0) {
+                if (bird.x + bird.radius > p.x && bird.x - bird.radius < p.x + 50) {
+                    if (bird.y - bird.radius < p.top || bird.y + bird.radius > canvas.height - p.bottom) {
+                        gameOver();
+                        return;
+                    }
+                }
+            }
+
+            // Нарахування очок
+            if (!p.passed && p.x + 25 < bird.x) {
+                p.passed = true;
+                currentScore++;
+                document.getElementById('live-current').innerText = currentScore;
+                if (currentScore > playerData.bestScore) {
+                    document.getElementById('live-best').innerText = currentScore;
+                }
+            }
+
+            // Видалення труб, що вийшли за екран
+            if (p.x < -50) {
+                pipes.splice(i, 1);
+            }
+        }
+
+        animationFrameId = requestAnimationFrame(gameLoop);
+    }
+</script>
+</body>
+</html>
